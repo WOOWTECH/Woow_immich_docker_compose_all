@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: immich-server
+  namespace: immich
+  labels:
+    app: immich
+    component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: immich
+      component: server
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: immich
+        component: server
+    spec:
+      containers:
+        - name: immich-server
+          image: ghcr.io/immich-app/immich-server:release
+          ports:
+            - containerPort: 2283
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: immich-config
+            - secretRef:
+                name: immich-db-secret
+          readinessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          startupProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 30
+          volumeMounts:
+            - name: upload-data
+              mountPath: /usr/src/app/upload
+            - name: localtime
+              mountPath: /etc/localtime
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: upload-data
+          persistentVolumeClaim:
+            claimName: immich-upload-data
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+            type: File
