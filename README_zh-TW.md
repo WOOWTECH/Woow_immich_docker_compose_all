@@ -44,6 +44,40 @@ English | [繁體中文](README_zh-TW.md)
 
 > **pgvector 已啟用** — 資料庫映像檔內建 pgvector 和 VectorChord，啟動時自動啟用。這為 Immich 的智慧照片搜尋和臉部辨識嵌入向量提供向量相似度搜尋能力。
 
+## 一鍵部署至 Portainer
+
+使用 Portainer 的 Stack 功能，可透過 GitHub Repository 網址快速部署本專案。
+
+[![Deploy to Portainer](https://img.shields.io/badge/Deploy_to-Portainer-13BEF9?style=for-the-badge&logo=portainer&logoColor=white)](#一鍵部署至-portainer)
+
+### 使用 Git Repository 部署（推薦）
+
+1. 登入你的 Portainer 管理介面
+2. 進入 **Stacks** → **Add stack**
+3. 選擇 **Repository**
+4. 填入以下資訊：
+
+   | 欄位 | 值 |
+   |------|-----|
+   | **Repository URL** | `https://github.com/WOOWTECH/Woow_immich_docker_compose_all` |
+   | **Repository reference** | `refs/heads/podman` |
+   | **Compose path** | `docker-compose.yml` |
+
+5. 點擊 **Deploy the stack**
+
+### 使用 Web Editor 部署
+
+1. 複製 `docker-compose.yml` 的 Raw URL：
+
+   ```
+   https://raw.githubusercontent.com/WOOWTECH/Woow_immich_docker_compose_all/podman/docker-compose.yml
+   ```
+
+2. 登入 Portainer → **Stacks** → **Add stack** → **Web editor**
+3. 使用 `curl` 或瀏覽器取得上述 URL 的內容，貼入編輯器
+4. 設定環境變數（參考 `.env`）
+5. 點擊 **Deploy the stack**
+
 ## 系統需求
 
 | 項目 | 最低需求 | 建議配置 |
