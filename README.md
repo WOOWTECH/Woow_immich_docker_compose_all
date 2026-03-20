@@ -1,453 +1,349 @@
-# Immich Docker Compose — Self-Hosted Photo & Video Management
+# Woow Immich - Home Assistant Add-on
 
-[繁體中文](README_zh-TW.md) | English
+**WOOWTECH 維護的 Immich Home Assistant 附加元件（HTTP 區網版本）**
 
-A production-ready Docker Compose stack for [Immich](https://immich.app/) — a high-performance, self-hosted alternative to Google Photos with AI-powered features including facial recognition, smart search, and automatic tagging.
+基於 [fabio-garavini/hassio-addons](https://github.com/fabio-garavini/hassio-addons/tree/main/immich) 的分支版本，移除了 SSL/HTTPS 強制需求，適合區域網路內使用 HTTP 存取，對外連線透過 Cloudflare Tunnel 建立 HTTPS 安全通道。
 
-## Architecture
+![main screenshot](https://github.com/immich-app/immich/raw/main/design/immich-screenshots.png)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Host Machine                                               │
-│                                                             │
-│   Port 2283 ──► ┌──────────────────────┐                   │
-│                  │   immich-server      │                   │
-│                  │   (Web UI + API +    │                   │
-│                  │    Background Jobs)  │                   │
-│                  └──────────┬───────────┘                   │
-│                             │                               │
-│              ┌──────────────┼──────────────┐                │
-│              ▼              ▼              ▼                 │
-│   ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
-│   │   database   │ │    redis     │ │ machine-learning │   │
-│   │  PostgreSQL  │ │   Valkey 9   │ │  CLIP / Face AI  │   │
-│   │  + pgvector  │ │  (job queue) │ │  (smart search)  │   │
-│   │  + VectorCh  │ │              │ │                  │   │
-│   └──────┬───────┘ └──────────────┘ └──────────────────┘   │
-│          │                                                  │
-│          ▼                                                  │
-│   ┌──────────────┐     ┌───────────────┐                   │
-│   │ ./postgres/  │     │  ./library/   │                   │
-│   │ (DB files)   │     │ (photos/vids) │                   │
-│   └──────────────┘     └───────────────┘                   │
-└─────────────────────────────────────────────────────────────┘
-```
 
-### Service Overview
+## Installation
 
-| Service | Image | Purpose | Port |
-|---------|-------|---------|------|
-| `immich-server` | `ghcr.io/immich-app/immich-server` | Web UI, REST API, background jobs | 2283 |
-| `immich-machine-learning` | `ghcr.io/immich-app/immich-machine-learning` | Face recognition, CLIP smart search, OCR | internal |
-| `redis` | `valkey/valkey:9-alpine` | Job queue and caching layer | internal |
-| `database` | `ghcr.io/immich-app/postgres:14-vectorchord` | PostgreSQL 14 with **pgvector** + VectorChord | internal |
+To install, click the button below:
 
-> **pgvector is ON** — The database image ships with pgvector and VectorChord pre-installed and auto-enabled. This powers Immich's vector-similarity search for smart photo search and facial recognition embeddings.
+[![Open your Home Assistant instance and show the dashboard of an add-on.](https://my.home-assistant.io/badges/supervisor_addon.svg)](https://my.home-assistant.io/redirect/supervisor_addon/?addon=woow-immich&repository_url=https%3A%2F%2Fgithub.com%2FWOOWTECH%2FWoow_immich_docker_compose_all)
 
-## Prerequisites
+Or add the repository manually:
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Docker Engine | 20.10+ | 24.0+ |
-| Docker Compose | v2.0+ (plugin) | v2.20+ |
-| RAM | 4 GB | 6 GB+ |
-| CPU | 2 cores | 4 cores |
-| Disk | 10 GB (system) | SSD for database |
-| Storage | Depends on library size | NAS/external for photos OK |
+[![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FWOOWTECH%2FWoow_immich_docker_compose_all)
 
-> **Important:** PostgreSQL data (`DB_DATA_LOCATION`) **must** be on local disk. NFS/network shares cause database corruption. Photo storage (`UPLOAD_LOCATION`) can be on NAS or network shares.
-
-## Quick Start
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/WOOWTECH/Woow_immich_docker_compose_all.git
-cd Woow_immich_docker_compose_all
-```
-
-### 2. Configure Environment Variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and **change at minimum**:
-
-```bash
-# REQUIRED — Set a strong random password (A-Za-z0-9 only)
-DB_PASSWORD=your_secure_random_password_here
-
-# RECOMMENDED — Set your timezone
-TZ=Asia/Taipei
-
-# OPTIONAL — Change storage locations
-UPLOAD_LOCATION=./library
-DB_DATA_LOCATION=./postgres
-```
-
-> **Security:** Never commit `.env` to version control. It's already in `.gitignore`.
-
-### 3. Launch the Stack
-
-```bash
-docker compose up -d
-```
-
-### 4. Verify All Services Are Running
-
-```bash
-docker compose ps
-```
-
-Expected output — all 4 containers should be `Up (healthy)`:
-
-```
-NAME                    STATUS
-immich_server           Up (healthy)
-immich_machine_learning Up (healthy)
-immich_redis            Up (healthy)
-immich_postgres         Up (healthy)
-```
-
-### 5. Access the Web UI
-
-Open your browser and navigate to:
-
-```
-http://<your-server-ip>:2283
-```
-
-The **first user** you register becomes the **admin** account with full control over settings, users, and libraries.
-
-## Project Structure
-
-```
-.
-├── docker-compose.yml      # Service definitions (4 containers)
-├── .env.example            # Environment variable template
-├── .env                    # Your actual config (git-ignored)
-├── .gitignore              # Files excluded from version control
-├── LICENSE                 # MIT License
-├── README.md               # English documentation (this file)
-├── README_zh-TW.md         # 繁體中文 documentation
-├── DEPLOYMENT.md           # Quick deployment reference / skill card
-├── library/                # Photo & video uploads (git-ignored)
-└── postgres/               # PostgreSQL data files (git-ignored)
-```
-
-## Configuration Reference
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `UPLOAD_LOCATION` | `./library` | Host path for uploaded photos and videos |
-| `DB_DATA_LOCATION` | `./postgres` | Host path for PostgreSQL data files (**local disk only**) |
-| `IMMICH_VERSION` | `v2` | Image tag — pin to e.g. `v2.5.6` for stability |
-| `TZ` | — | Timezone ([TZ list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)) |
-| `IMMICH_PORT` | `2283` | Host port for web UI |
-| `DB_PASSWORD` | — | **Required** — PostgreSQL password (A-Za-z0-9 only) |
-| `DB_USERNAME` | `postgres` | PostgreSQL username |
-| `DB_DATABASE_NAME` | `immich` | PostgreSQL database name |
-
-### Database Extensions (pgvector)
-
-The official Immich PostgreSQL image includes:
-
-- **pgvector** (v0.7+) — Vector similarity search extension
-- **VectorChord** (v0.4+) — Optimized vector index with lower RAM and better search quality
-
-These are auto-detected and enabled at startup. No manual configuration needed. The `DB_VECTOR_EXTENSION` environment variable is optional — when not set, Immich auto-detects the best available extension.
-
-### Hardware Acceleration (Optional)
-
-For transcoding acceleration, create `hwaccel.transcoding.yml` and uncomment the `extends` section in `docker-compose.yml`. Options: `nvenc`, `quicksync`, `rkmpp`, `vaapi`.
-
-For ML acceleration, create `hwaccel.ml.yml` and uncomment the ML `extends` section. Options: `cuda`, `rocm`, `openvino`, `armnn`, `rknn`.
-
-See: https://docs.immich.app/features/ml-hardware-acceleration
-
-## Operations
-
-### Start / Stop / Restart
-
-```bash
-# Start all services
-docker compose up -d
-
-# Stop all services (preserves data)
-docker compose down
-
-# Restart all services
-docker compose restart
-
-# View real-time logs
-docker compose logs -f
-
-# View logs for a specific service
-docker compose logs -f immich-server
-```
-
-### Update Immich
-
-```bash
-# Pull latest images
-docker compose pull
-
-# Recreate containers with new images
-docker compose up -d
-
-# Verify versions
-docker compose ps
-```
-
-> **Tip:** Pin `IMMICH_VERSION` to a specific tag (e.g., `v2.5.6`) in production to avoid unexpected breaking changes during updates.
-
-### Health Checks
-
-```bash
-# Check container status
-docker compose ps
-
-# Check PostgreSQL connectivity
-docker compose exec database pg_isready -U postgres
-
-# Check pgvector extension
-docker compose exec database psql -U postgres -d immich -c "SELECT extname, extversion FROM pg_extension WHERE extname IN ('vector', 'vchord');"
-
-# Check Redis
-docker compose exec redis redis-cli ping
-```
-
-### Database Maintenance
-
-```bash
-# Connect to PostgreSQL
-docker compose exec database psql -U postgres -d immich
-
-# Check database size
-docker compose exec database psql -U postgres -d immich \
-  -c "SELECT pg_size_pretty(pg_database_size('immich'));"
-
-# List tables and sizes
-docker compose exec database psql -U postgres -d immich \
-  -c "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size FROM pg_tables WHERE schemaname = 'public' ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC LIMIT 20;"
-
-# Verify pgvector is active
-docker compose exec database psql -U postgres -d immich \
-  -c "SELECT * FROM pg_extension WHERE extname = 'vector';"
-```
-
-## Backup & Restore
-
-### Backup
-
-```bash
-# Full database backup (compressed)
-docker compose exec -T database pg_dumpall -U postgres | gzip > "backup_immich_$(date +%Y%m%d_%H%M%S).sql.gz"
-
-# Database-only backup (smaller)
-docker compose exec -T database pg_dump -U postgres -d immich | gzip > "backup_immich_db_$(date +%Y%m%d_%H%M%S).sql.gz"
-```
-
-### Automated Backup (Cron)
-
-Add to crontab (`crontab -e`):
-
-```cron
-# Daily Immich database backup at 3:00 AM
-0 3 * * * cd /path/to/Woow_immich_docker_compose_all && docker compose exec -T database pg_dumpall -U postgres | gzip > backups/backup_$(date +\%Y\%m\%d).sql.gz 2>&1
-```
-
-### Restore
-
-```bash
-# Stop Immich server first
-docker compose stop immich-server immich-machine-learning
-
-# Restore from backup
-gunzip < backup_immich_20260313.sql.gz | docker compose exec -T database psql -U postgres
-
-# Restart services
-docker compose up -d
-```
-
-### Photo Backup
-
-The `library/` directory contains all uploaded photos and videos. Back it up with your preferred method:
-
-```bash
-# Using rsync
-rsync -av --progress ./library/ /backup/immich-library/
-
-# Using tar
-tar czf "library_backup_$(date +%Y%m%d).tar.gz" ./library/
-```
-
-## Troubleshooting
-
-### Container Won't Start
-
-```bash
-# Check logs for errors
-docker compose logs --tail=50 immich-server
-
-# Check if ports are in use
-ss -tlnp | grep 2283
-
-# Verify .env is loaded
-docker compose config
-```
-
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL is running and healthy
-docker compose ps database
-
-# Test connectivity
-docker compose exec database pg_isready -U postgres -d immich
-
-# Check PostgreSQL logs
-docker compose logs --tail=50 database
-```
-
-### pgvector / VectorChord Issues
-
-```bash
-# Verify extensions are installed
-docker compose exec database psql -U postgres -d immich \
-  -c "SELECT extname, extversion FROM pg_extension;"
-
-# Check shared_preload_libraries
-docker compose exec database psql -U postgres \
-  -c "SHOW shared_preload_libraries;"
-```
-
-### Machine Learning Not Working
-
-```bash
-# Check ML container logs
-docker compose logs --tail=50 immich-machine-learning
-
-# Verify model cache
-docker volume inspect immich_model-cache
-
-# ML first-run downloads ~1-2GB of models — check progress
-docker compose logs -f immich-machine-learning
-```
-
-### Reset Everything
-
-```bash
-# WARNING: This destroys ALL data!
-docker compose down -v
-rm -rf ./library ./postgres
-docker compose up -d
-```
-
-## Mobile App Setup
-
-1. Install "Immich" from [App Store](https://apps.apple.com/app/immich/id1613945686) or [Google Play](https://play.google.com/store/apps/details?id=app.alextran.immich)
-2. Open the app and enter your server URL: `http://<server-ip>:2283/api`
-3. Log in with your admin credentials
-4. Enable automatic backup in app settings
-
-## Reverse Proxy (Optional)
-
-For HTTPS access, put Immich behind a reverse proxy. Example with Nginx:
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name photos.example.com;
-
-    ssl_certificate     /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    client_max_body_size 50000M;
-
-    location / {
-        proxy_pass http://127.0.0.1:2283;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # WebSocket support
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-> Set `IMMICH_TRUSTED_PROXIES` in `.env` if using a reverse proxy.
-
-## External Libraries
-
-To index existing photo folders without copying files:
-
-1. Add the folder as a volume in `docker-compose.yml`:
-   ```yaml
-   immich-server:
-     volumes:
-       - ${UPLOAD_LOCATION}:/data
-       - /path/to/existing/photos:/data/external:ro
-   ```
-2. Restart: `docker compose up -d`
-3. In Immich web UI: **Administration > External Libraries > Create Library**
-4. Set the import path to `/data/external`
-
-## References
-
-- [Immich Official Documentation](https://docs.immich.app/)
-- [Immich Docker Compose Guide](https://docs.immich.app/install/docker-compose/)
-- [Immich Environment Variables](https://docs.immich.app/install/environment-variables/)
-- [Immich GitHub Repository](https://github.com/immich-app/immich)
-- [PostgreSQL pgvector Extension](https://github.com/pgvector/pgvector)
-- [VectorChord Extension](https://github.com/tensorchord/VectorChord)
-- [Immich Standalone PostgreSQL Guide](https://docs.immich.app/administration/postgres-standalone/)
-
-## License
-
-[MIT License](LICENSE) — Copyright (c) 2026 WOOWTECH
+Then navigate to **Settings → Add-ons → Add-on Store**, find "Woow Immich" and click **INSTALL**.
 
 ---
 
-## K3s/Kubernetes Deployment
+## 目錄
 
-This project also supports deployment on **K3s/Kubernetes** clusters. The K3s manifests are maintained on a separate branch.
+- [簡介](#簡介)
+- [與上游版本的差異](#與上游版本的差異)
+- [系統需求](#系統需求)
+- [安裝方式](#安裝方式)
+- [設定說明](#設定說明)
+- [Cloudflare Tunnel 設定](#cloudflare-tunnel-設定)
+- [內建元件](#內建元件)
+- [儲存管理](#儲存管理)
+- [外部儲存掛載](#外部儲存掛載)
+- [NAS 儲存設定](#nas-儲存設定)
+- [媒體庫遷移](#媒體庫遷移)
+- [資料庫備份還原](#資料庫備份還原)
+- [常見問題](#常見問題)
+- [致謝](#致謝)
+- [授權條款](#授權條款)
 
-### Quick Start (K3s)
+---
 
-```bash
-# Clone the k3s branch
-git clone -b k3s https://github.com/WOOWTECH/Woow_immich_docker_compose_all.git Woow_immich_docker_compose_all-k3s
-cd Woow_immich_docker_compose_all-k3s
+## 簡介
 
-# Edit secrets before deploying
-nano secret.yaml
+[Immich](https://immich.app) 是一個高效能的自架照片與影片管理解決方案，旨在取代商業雲端服務。本附加元件提供完整的一體化媒體管理生態系統，具備 AI 驅動功能。
 
-# Deploy to your k3s cluster
-kubectl apply -k .
+### 主要特色
 
-# Verify pods are running
-kubectl -n immich get pods
+- **自動備份**：從手機/網頁客戶端同步
+- **AI 智慧搜尋**：物件/場景辨識、人臉辨識
+- **時間軸檢視**：按時間排列的媒體組織
+- **共享相簿**：協作式照片管理
+- **RAW 支援**：專業攝影工作流程
+- **機器學習**：基於 TensorFlow 的辨識引擎
+
+---
+
+## 與上游版本的差異
+
+本版本從 [fabio-garavini/hassio-addons](https://github.com/fabio-garavini/hassio-addons) 分支而來，主要修改如下：
+
+| 項目 | 上游版本 | WOOWTECH 版本 |
+|------|----------|----------------|
+| 預設協定 | HTTPS（需 SSL 憑證） | HTTP（區網直接存取） |
+| SSL 設定 | 需要 `ssl`、`certfile`、`keyfile` | 已移除，不需設定 |
+| 自簽憑證 | 找不到憑證時自動產生 | 不需要 |
+| Web UI 網址 | `https://[HOST]:8080` | `http://[HOST]:8080` |
+| 對外安全連線 | 自行設定 SSL | 建議使用 Cloudflare Tunnel |
+| 翻譯 | 僅英文 | 新增繁體中文（zh-Hant） |
+| SSL volume 掛載 | 需要掛載 `/ssl` | 不需要 |
+| Nginx 反向代理 | 支援 SSL/HTTP 切換 | 固定 HTTP |
+
+### 為什麼移除 SSL？
+
+在區域網路（LAN）環境中，HTTP 已足夠安全且設定更簡單。對外連線建議透過 Cloudflare Tunnel 建立 HTTPS 加密通道，好處包括：
+
+1. **免費 SSL 憑證**：Cloudflare 自動管理
+2. **無需開放路由器連接埠**：Tunnel 從內部向外連線
+3. **DDoS 防護**：Cloudflare 內建防護
+4. **簡化管理**：不需自行維護 SSL 憑證
+
+---
+
+## 系統需求
+
+- Home Assistant OS 或 Home Assistant Supervised
+- 支援架構：`amd64`、`aarch64`（ARM64）
+- 建議至少 4GB RAM（機器學習功能需要較多記憶體）
+- 建議使用 SSD 以獲得更好的效能
+
+---
+
+## 安裝方式
+
+### 第一步：新增儲存庫
+
+1. 開啟 Home Assistant
+2. 前往 **設定** > **附加元件** > **附加元件商店**
+3. 點選右上角 **三個點** > **儲存庫**
+4. 輸入此儲存庫網址：
+   ```
+   https://github.com/WOOWTECH/Woow_immich_docker_compose_all
+   ```
+5. 點選 **新增** > **關閉**
+
+### 第二步：安裝附加元件
+
+1. 在附加元件商店中搜尋 **Woow Immich**
+2. 點選 **安裝**
+3. 等待安裝完成（映像檔較大，需要一些時間）
+
+### 第三步：首次設定
+
+1. 前往附加元件的 **設定** 頁面
+2. 設定時區：
+   ```yaml
+   TZ: Asia/Taipei
+   ```
+3. 選擇儲存類型（SSD 或 HDD）
+4. 點選 **啟動**
+5. 點選 **開啟網頁介面** 並完成首次設定精靈
+
+---
+
+## 設定說明
+
+### 可用設定選項
+
+| 選項 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `PUID` | 整數 | `0` | 執行 Immich 的使用者 ID |
+| `PGID` | 整數 | `0` | 執行 Immich 的群組 ID |
+| `TZ` | 字串 | `Etc/UTC` | 時區，建議 `Asia/Taipei` |
+| `IMMICH_LOG_LEVEL` | 選項 | `log` | 日誌等級：`verbose`/`debug`/`log`/`warn`/`error` |
+| `DB_STORAGE_TYPE` | 選項 | `HDD` | 儲存類型：`SSD` 或 `HDD` |
+| `MACHINE_LEARNING_MODEL_TTL` | 整數 | `300` | ML 模型閒置保留時間（秒），`0` = 永不卸載 |
+| `MACHINE_LEARNING_WORKERS` | 整數 | (空) | ML 工作程序數量 |
+| `MACHINE_LEARNING_WORKER_TIMEOUT` | 整數 | `300` | ML 工作程序逾時（秒） |
+| `IMMICH_TRUSTED_PROXIES` | 字串 | `172.30.32.0/23` | 受信任代理 IP |
+| `IMMICH_MEDIA_LOCATION` | 路徑 | `/media/immich` | 媒體儲存位置 |
+| `storage_mounts` | 列表 | `[]` | 外部儲存掛載 |
+| `clean_redis` | 布林 | (空) | 啟動時清除 Redis |
+| `APPLY_PERMISSIONS` | 布林 | `false` | 啟動時套用檔案權限 |
+| `backup_location` | 字串 | (空) | PostgreSQL 備份位置 |
+| `restore_backup` | 布林 | `false` | 是否還原備份 |
+| `delete_db` | 布林 | (空) | 刪除資料庫（僅還原時使用） |
+| `env_vars` | 列表 | `[]` | 自訂環境變數 |
+
+### 網路連接埠
+
+| 連接埠 | 服務 |
+|--------|------|
+| `8080/tcp` | Immich 網頁介面（HTTP） |
+| `5432/tcp` | PostgreSQL 資料庫 |
+| `6379/tcp` | Redis 資料庫 |
+
+---
+
+## Cloudflare Tunnel 設定
+
+若需從外部網路安全存取 Immich，建議使用 Cloudflare Tunnel。
+
+### 設定步驟
+
+1. 在 Cloudflare Zero Trust 儀表板中建立 Tunnel
+2. 設定 Tunnel 的 Public Hostname：
+   - **Subdomain**：例如 `immich`
+   - **Domain**：您的網域
+   - **Service Type**：`HTTP`
+   - **URL**：`<HA 內部 IP>:8080`
+3. 在 Immich 管理介面中設定外部 URL
+4. 重新啟動附加元件
+
+設定完成後，您可透過 `https://immich.your-domain.com` 從外部安全存取 Immich。
+
+**手機 App 設定**：在 Immich 手機 App 中，伺服器位址請填入 Cloudflare Tunnel 的 HTTPS 網址。
+
+---
+
+## 內建元件
+
+### Immich 核心 + 機器學習
+
+- 連接埠：`2283`（內部），透過 Nginx 反向代理至 `8080`
+- 支援物件辨識、場景辨識、人臉辨識
+- 資料快取：`/data/cache`
+
+### PostgreSQL + VectorChord
+
+- 版本：PostgreSQL 16
+- 向量搜尋擴充：VectorChord + pgvecto.rs
+- 資料目錄：`/config/postgres`
+- 通訊方式：Unix Socket（效能更好）
+
+### Redis
+
+- 連接埠：`6379`
+- 通訊方式：Unix Socket (`/var/run/redis/redis.sock`)
+- 設定檔：`/config/redis/redis.conf`
+
+### Nginx
+
+- 連接埠：`8080`（HTTP）
+- 角色：反向代理，將外部請求轉發至 Immich 核心
+
+---
+
+## 儲存管理
+
+### Immich 媒體庫
+
+- 預設儲存在 `/media/immich`（由 `IMMICH_MEDIA_LOCATION` 設定）
+- 若要包含在附加元件備份中，可改為 `/config/library`（注意：這會大幅增加備份大小）
+- **請勿**手動移動或修改此資料夾中的檔案，應透過 Immich 介面管理
+
+### 外部媒體庫
+
+- 可將照片/影片儲存在掛載於以下路徑的外部資料夾：
+  - `/media`
+  - `/share`
+  - `/mnt`（透過 storage_mounts）
+
+---
+
+## 外部儲存掛載
+
+### 掛載硬碟
+
+1. 將硬碟連接到 Home Assistant 伺服器
+2. 啟動 Immich 並查看日誌中的磁碟資訊
+3. 在 `storage_mounts` 中新增：
+   ```yaml
+   - type: local
+     mount: sda          # 磁碟裝置名稱
+     path: storage       # 掛載到 /mnt/storage
+     auto_format: true   # 格式化為 ext4
+     erase: true
+   ```
+4. 啟動後依照日誌提示更新設定（改用 UUID）
+5. 更新後務必關閉 `auto_format` 和 `erase`
+
+---
+
+## NAS 儲存設定
+
+### 方式一：透過 Home Assistant 儲存掛載
+
+1. 停止 Immich
+2. 前往 **Supervisor** > **系統** > **儲存**
+3. 新增網路儲存（SMB 或 NFS）
+4. 更新 `IMMICH_MEDIA_LOCATION` 為 `/<usage>/<name>`
+5. 啟動 Immich
+
+### 方式二：透過附加元件設定
+
+SMB 範例：
+```yaml
+storage_mounts:
+  - type: smb
+    mount: //192.168.1.242/photos
+    path: immich-nas
+    username: user
+    password: password
 ```
 
-### Deployment Methods Comparison
+NFS 範例：
+```yaml
+storage_mounts:
+  - type: nfs
+    mount: 192.168.1.242:/storage/photos
+    path: immich-nfs
+```
 
-| Feature | Podman/Docker Compose | K3s/Kubernetes |
-|---------|----------------------|----------------|
-| Branch | `main` | `k3s` |
-| Orchestrator | Podman / Docker | K3s / Kubernetes |
-| Config format | `.env` + `docker-compose.yml` | ConfigMap + Secret + YAML manifests |
-| Scaling | Manual | `kubectl scale` |
-| Health checks | Docker healthcheck | liveness/readiness/startup probes |
-| Service discovery | Docker DNS | Kubernetes DNS (`svc.cluster.local`) |
-| Storage | Docker volumes | PersistentVolumeClaims |
-| Rolling updates | `docker compose pull && up -d` | `kubectl rollout restart` |
+---
 
-> For full K3s deployment documentation, switch to the [`k3s` branch](https://github.com/WOOWTECH/Woow_immich_docker_compose_all/tree/k3s).
+## 媒體庫遷移
+
+若要將媒體庫搬移到新位置：
+
+1. 確保新資料夾為空或不存在
+2. 修改 `IMMICH_MEDIA_LOCATION` 為新路徑
+3. 啟動 Immich，系統會自動執行遷移
+
+支援的路徑：`/media/`、`/share/`、`/config/library`、`/mnt/`（外部掛載）
+
+---
+
+## 資料庫備份還原
+
+### 手動還原 PostgreSQL 備份
+
+1. 確保已透過 [Immich 傾印](https://docs.immich.app/administration/backup-and-restore/#trigger-dump) 建立備份
+2. 將備份檔案放置於 Home Assistant 可存取的路徑
+3. 在設定中：
+   - 設定 `backup_location` 為備份檔路徑（如 `/media/immich/backups/backup.sql.gz`）
+   - 啟用 `restore_backup`
+   - 啟用 `delete_db` 和 `clean_redis`
+4. 啟動 Immich 並查看日誌
+5. 還原完成後，**務必停用** `restore_backup`、`delete_db` 和 `clean_redis`
+
+---
+
+## 常見問題
+
+### Q：區網存取顯示連線不安全？
+
+A：本版本使用 HTTP，瀏覽器可能會顯示「不安全」提示，但在區網內這是正常的。若需 HTTPS，請設定 Cloudflare Tunnel。
+
+### Q：機器學習處理速度很慢？
+
+A：考慮預載機器學習模型以加速處理。注意這會使用更多記憶體。也可增加 `MACHINE_LEARNING_WORKERS` 數量。
+
+### Q：上傳失敗？
+
+A：檢查儲存空間是否足夠，以及檔案權限是否與 `PUID`/`PGID` 設定一致。
+
+### Q：手機 App 無法連線？
+
+A：
+- 區網：使用 `http://<HA IP>:8080`
+- 外網：使用 Cloudflare Tunnel 的 HTTPS 網址
+
+### Q：如何備份？
+
+A：此附加元件支援 Home Assistant 的冷備份（cold backup），備份前會自動停止服務。快取和日誌會被排除。
+
+### Q：Redis 出現問題怎麼辦？
+
+A：在設定中啟用 `clean_redis`，重新啟動後再關閉此選項。
+
+---
+
+## 致謝
+
+- **上游專案**：[fabio-garavini/hassio-addons](https://github.com/fabio-garavini/hassio-addons) - 原始 Immich HA Add-on
+- **Immich**：[immich-app/immich](https://github.com/immich-app/immich) - 照片與影片管理平台
+- **ImageGenius**：[imagegenius/docker-immich](https://github.com/imagegenius/docker-immich) - Docker 基礎映像
+- **Home Assistant**：[home-assistant](https://www.home-assistant.io/) - 智慧家庭平台
+
+---
+
+## 授權條款
+
+本專案基於 MIT 授權條款發布。
+
+原始程式碼來自 [fabio-garavini/hassio-addons](https://github.com/fabio-garavini/hassio-addons)，同樣使用 MIT 授權。
+
+Immich 本身使用 [AGPL-3.0 License](https://github.com/immich-app/immich/blob/main/LICENSE)。
